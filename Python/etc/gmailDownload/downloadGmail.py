@@ -13,6 +13,9 @@ PAUSE_COUNT = 250
 # Required folders
 REQUIRED_FOLDER = "[Gmail]/All Mail"
 
+# Checkpoint progress as my Raspberry pi seems to die unexpectedly, a lot
+CHECKPOINT = ".checkpoint"
+
 # Configure application log to required level
 logging.basicConfig(filename='application.log', level=logging.INFO)
 
@@ -53,6 +56,35 @@ def downloadAttachments(mail, mailID):
 		os.rename(fileNamePrefix+filename+".inprogress", fileNamePrefix+filename)
 
 
+# Based on where the checkpoint is, return mailIDs that aren't (probably) processed yet. 
+# Could use the filenames of stored mails, but this is cleaner approach
+def loadState(mailIDList):
+        if os.path.isfile(CHECKPOINT) == False:
+                return mailIDList
+        try:
+                # Checkpoint file exists - load it
+                fp = open(CHECKPOINT)
+                checkpoint = fp.readline().strip()
+                if checkpoint in mailIDList:
+                        logging.info("Loading checkpoint: " + checkpoint + "  at mailID-list index: " + str(mailIDList.index(checkpoint)))
+                        return mailIDList[mailIDList.index(checkpoint)+1:]
+        except Exception,e:
+                logging.exception("Checkpoint method failed strangely!")
+                pass
+        logging.info("Couldn't load any state")
+        return mailIDList
+
+# Save checkpoint
+def saveState(mailID):
+        nextCheckpoint = CHECKPOINT+'.next'
+        fp = open(nextCheckpoint, 'w')  
+        fp.write(mailID)
+        fp.close()
+        os.rename(nextCheckpoint, CHECKPOINT)   # Once next checkpoint is committed completely, make it actual checkpoint
+
+
+# Main
+
 user = raw_input("Enter your GMail username:")
 pwd = getpass.getpass("Enter your password: ")
 m = imaplib.IMAP4_SSL(IMAP_SERVER)
@@ -68,6 +100,11 @@ logging.info("Total number of mails: " + str(len(emailIDs)))
 # Start fetching from latest to oldest mails
 emailIDs.reverse()
 
+# Start where we were interrupted
+emailIDs = loadState(emailIDs)
+
+logging.info("Starting at mailID: " + emailIDs[0])
+
 pauseCounter = 0
 for emailid in emailIDs:
 	try:
@@ -78,6 +115,8 @@ for emailid in emailIDs:
 		email_body = data[0][1]
 		mail = email.message_from_string(email_body)
 		dumpMail(mail, emailid)
+                # Commit progress till now
+                saveState(emailid)
 		pauseCounter = pauseCounter + 1
 		# Would Google throttle/block if I overload ?
 		if pauseCounter % PAUSE_COUNT == 0:
