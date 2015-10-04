@@ -19,17 +19,31 @@ CHECKPOINT = ".checkpoint"
 # Configure application log to required level
 logging.basicConfig(filename='application.log', level=logging.INFO)
 
+
+# get_payload() would return a list of Message-objects if its multipart else a string, this helper 
+# method wraps that by recursively extracting and returning entire payload
+def extractPayload(mail):
+        if mail.is_multipart():
+                # Recursively extract payload if it is multipart
+                data = ''
+                for part in mail.get_payload():
+                        data = data + extractPayload(part)
+                return data
+        else:
+                # If its not multipart, payload would be string and just return it
+                return mail.get_payload()
+
 # Dump all the data that looks important, has lot of duplicates, but OK for now. Could 
 # get whatever we want later
 def dumpMail(mail, mailID):
         data = {}
-        data['as_string'] = mail.as_string(True)
         data['is_multipart'] = mail.is_multipart()
         data['preamble'] = mail.preamble
         data['epilogue'] = mail.epilogue
         data['defects'] = mail.defects
         data['keys'] = mail.keys()
         data['items'] = mail.items()
+        data['payload'] = extractPayload(mail)
 
         fp = open(mailID+".mail.inprogress", 'w')                # .inprogress suffix till write is complete - while externally gzipping files, filter .inprogress files
         fp.write(json.dumps(data, indent=4, sort_keys=True))
