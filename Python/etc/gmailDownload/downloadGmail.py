@@ -117,7 +117,7 @@ emailIDs.reverse()
 # Start where we were interrupted
 emailIDs = loadState(emailIDs)
 
-logging.info("Starting at mailID: " + emailIDs[0])
+logging.info("Starting at mailID: " + emailIDs[0] if len(emailIDs) > 0 else 'None - Looks like we finished everything')
 
 pauseCounter = 0
 for emailid in emailIDs:
